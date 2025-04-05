@@ -1,48 +1,71 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import BookGraph from "./components/BookGraph";
-import { initialBooks } from "./data/initialBooks";
 import BookForm from "./components/BookForm";
-import BookCard from "./components/BookCard";
-import { fetchCoverId } from "./services/bookService";
+import { auth } from "./firebase";
+import { onSnapshot, collection } from "firebase/firestore";
+import { db } from "./firebase"; // your Firebase setup
+import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from "firebase/auth";
+import { getBooksForUser, saveBookForUser } from "./services/dbService";
 
-export default function App() {
-  const [books, setBooks] = useState(initialBooks);
+const App = () => {
+  const [books, setBooks] = useState([]);
+  const [user, setUser] = useState(null);
 
-  // Fetch missing covers when app loads
+  // Check authentication status
   useEffect(() => {
-    async function enrichCovers() {
-      const updatedBooks = await Promise.all(
-        books.map(async (book) => {
-          if (!book.coverId) {
-            const coverId = await fetchCoverId(book.title);
-            return { ...book, coverId };
-          }
-          return book;
-        })
-      );
-      setBooks(updatedBooks);
-    }
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
+        const userBooks = await getBooksForUser(currentUser.uid);
+        setBooks(userBooks);
+      } else {
+        setBooks([]);
+      }
+    });
 
-    enrichCovers();
+    return () => unsubscribe();
   }, []);
 
-  const handleAddBook = (newBook) => {
-    setBooks((prevBooks) => [...prevBooks, newBook]);
+  // Add a new book to state + Firebase
+  const handleAddBook = async (book) => {
+    if (!user) return;
+    await saveBookForUser(user.uid, book);
+    setBooks((prev) => [...prev, book]);
+  };
+
+  const handleLogin = () => {
+    const provider = new GoogleAuthProvider();
+    signInWithPopup(auth, provider).catch(console.error);
+  };
+
+  const handleLogout = () => {
+    signOut(auth);
   };
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">📚 The Reading Web: Visualize Your Reading Universe</h1>
-      <BookForm onAddBook={handleAddBook} />
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mt-4">
-        {books.map((book) => (
-          <BookCard key={book.id} book={book} />
-        ))}
-      </div>
-      <div className="mt-10">
-        <BookGraph books={books} />
-      </div>
+    <div style={{ padding: "1rem", fontFamily: "sans-serif" }}>
+      <header style={{ marginBottom: "1rem" }}>
+        <h1>📚 The Reading Web</h1>
+        {user ? (
+          <>
+            <p>Welcome, {user.displayName}</p>
+            <button onClick={handleLogout}>Sign Out</button>
+          </>
+        ) : (
+          <button onClick={handleLogin}>Sign In with Google</button>
+        )}
+      </header>
+
+      {user && (
+        <>
+          <BookForm onAddBook={handleAddBook} />
+          <BookGraph books={books} />
+        </>
+      )}
+
+      {!user && <p>Please sign in to view and save your reading graph.</p>}
     </div>
   );
-}
+};
 
+export default App;
