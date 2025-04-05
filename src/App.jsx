@@ -42,7 +42,7 @@ export default function App() {
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">📚 BookGraph: Visualize Your Reading Universe</h1>
+      <h1 className="text-2xl font-bold mb-4">📚 The Reading Web: Visualize Your Reading Universe</h1>
       <BookForm onAddBook={book => setBooks([...books, book])} />
       <BookGraph books={books} />
     </div>
